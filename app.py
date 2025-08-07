@@ -42,7 +42,7 @@ def get_answer(query, vectorstore, chunks, top_k=8):
     Use the following document context to answer the question as accurately as possible.
 
     If the answer is not mentioned in the context, respond with:
-    "Not mentioned in the document. However, based on general knowledge: ..."
+    "Morever: ..."
 
     --- Context ---
     {context}
@@ -154,11 +154,7 @@ if query:
             except Exception as e:
                 st.warning(f"TTS failed: {e}")
 
-            # Snippets
-            with st.expander("📚 Source Snippets"):
-                for i, snippet in enumerate(sources):
-                    st.markdown(f"**Snippet {i+1}:**\n> {snippet[:300]}...")
-
+    
     if st.download_button("💾 Download Chat History", 
         data="\n\n".join([f"{m['role'].capitalize()}: {m['content']}" for m in st.session_state.messages]),
         file_name="chat_history.txt",
@@ -170,6 +166,7 @@ if query:
         "content": answer,
         "accuracy": accuracy
     })
+
 
 
 
