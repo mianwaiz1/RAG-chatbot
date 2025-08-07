@@ -113,8 +113,8 @@ if "vectorstore" not in st.session_state or "chunks" not in st.session_state:
 # Show chat history
 for entry in st.session_state.messages:
     with st.chat_message(entry["role"]):
-         st.caption("The accuracy is depending on the relation between context of document and the question")
         st.markdown(entry["content"])
+        st.caption("The accuracy is depending on the relation between context of document and the question")
         if "accuracy" in entry:
             acc = entry["accuracy"]
             if acc > 80:
