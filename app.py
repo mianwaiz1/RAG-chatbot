@@ -42,7 +42,7 @@ def get_answer(query, vectorstore, chunks, top_k=8):
     Use the following document context to answer the question as accurately as possible.
 
     If the answer is not mentioned in the context, respond with:
-    "Morever: ..."
+    "Not mentioned in the document. However, based on my knowledge: ..."
 
     --- Context ---
     {context}
