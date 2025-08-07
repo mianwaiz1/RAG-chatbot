@@ -1,5 +1,4 @@
 import os
-import pickle
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
@@ -10,6 +9,8 @@ from langchain_google_genai import (
     ChatGoogleGenerativeAI
 )
 import numpy as np
+from gtts import gTTS
+import tempfile
 
 load_dotenv()
 
@@ -53,8 +54,6 @@ def semantic_score_google_embeddings(answer, references):
     try:
         ans_emb = embedder.embed_query(answer)
         ref_embs = [embedder.embed_query(ref) for ref in references]
-
-        # Calculate cosine similarity
         similarities = [np.dot(ans_emb, ref_emb) / (np.linalg.norm(ans_emb) * np.linalg.norm(ref_emb)) for ref_emb in ref_embs]
         return round(float(max(similarities)) * 100, 2)
     except Exception as e:
@@ -70,28 +69,21 @@ st.markdown("---")
 uploaded_file = st.file_uploader("📄 Upload a PDF", type=["pdf"])
 use_custom_pdf = uploaded_file is not None
 
-# Chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Load vectorstore
 if uploaded_file:
-    # Handle uploaded file and set session_state.vectorstore
     with st.spinner("Processing uploaded PDF..."):
         with open("uploaded.pdf", "wb") as f:
             f.write(uploaded_file.read())
-
         vectorstore, chunks = build_vectorstore_from_path("uploaded.pdf")
         st.session_state.vectorstore = vectorstore
         st.session_state.chunks = chunks
-
         st.success("✅ PDF processed! You can now ask questions.")
 
-# ✅ Prevent chat until vectorstore is ready
 if "vectorstore" not in st.session_state or "chunks" not in st.session_state:
     st.warning("📄 Please upload a PDF first to enable the chatbot.")
-    st.stop()  # ⛔ Stop the app from running further
-
+    st.stop()
 
 # Show chat history
 for entry in st.session_state.messages:
@@ -107,10 +99,10 @@ for entry in st.session_state.messages:
                 color = "🔴 Low"
             st.markdown(f"📊 **Answer Accuracy: {acc}%** ({color})")
 
-# Chat input
 if st.button("🧹 Clear Chat"):
     st.session_state.messages = []
     st.rerun()
+
 query = st.chat_input("Ask a question...")
 if query:
     with st.chat_message("user"):
@@ -125,10 +117,33 @@ if query:
                 st.session_state.chunks
             )
             st.markdown(answer)
-            st.caption(f"📊 Answer Accuracy: **{accuracy}%**")
+
+            # Show accuracy score with color label
+            if accuracy > 80:
+                label = "🟢 High"
+            elif accuracy > 50:
+                label = "🟡 Medium"
+            else:
+                label = "🔴 Low"
+
+            st.markdown(f"📊 **Answer Accuracy: {accuracy}%** ({label})")
+
+
+            # ✅ TEXT TO SPEECH SECTION
+            try:
+                tts = gTTS(answer)
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
+                    tts.save(tmpfile.name)
+                    audio_bytes = open(tmpfile.name, 'rb').read()
+                    st.audio(audio_bytes, format="audio/mp3")
+            except Exception as e:
+                st.warning(f"TTS failed: {e}")
+
+            # Snippets
             with st.expander("📚 Source Snippets"):
                 for i, snippet in enumerate(sources):
-                    st.markdown(f"**Snippet {i+1}:**\n> {snippet[:300]}...")    
+                    st.markdown(f"**Snippet {i+1}:**\n> {snippet[:300]}...")
+
     if st.download_button("💾 Download Chat History", 
         data="\n\n".join([f"{m['role'].capitalize()}: {m['content']}" for m in st.session_state.messages]),
         file_name="chat_history.txt",
@@ -140,4 +155,3 @@ if query:
         "content": answer,
         "accuracy": accuracy
     })
-
