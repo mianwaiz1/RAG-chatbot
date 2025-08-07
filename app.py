@@ -27,38 +27,52 @@ embedder = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 def build_vectorstore_from_path(path):
     loader = PyMuPDFLoader(path)
     docs = loader.load()
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
     chunks = splitter.split_documents(docs)
     vectorstore = FAISS.from_documents(chunks, embedding=embedder)
     return vectorstore, [doc.page_content for doc in chunks]
 
 # ---------- RAG + Scoring ----------
-def get_answer(query, vectorstore, chunks, top_k=3):
+def get_answer(query, vectorstore, chunks, top_k=8):
     docs = vectorstore.similarity_search(query, k=top_k)
     references = [doc.page_content for doc in docs]
     context = "\n\n".join(references)
 
-    prompt = f"""Answer the question using only the context below:
+    prompt = f"""
+    Use the following document context to answer the question as accurately as possible.
 
-Context:
-{context}
+    If the answer is not mentioned in the context, respond with:
+    "Not mentioned in the document. However, based on general knowledge: ..."
 
-Question:
-{query}"""
+    --- Context ---
+    {context}
+
+    --- Question ---
+    {query}
+    """
 
     answer = llm.invoke(prompt).content
     score = semantic_score_google_embeddings(answer, references)
-    return answer, references, score
+    return answer.strip(), references, score
 
 def semantic_score_google_embeddings(answer, references):
     try:
         ans_emb = embedder.embed_query(answer)
         ref_embs = [embedder.embed_query(ref) for ref in references]
-        similarities = [np.dot(ans_emb, ref_emb) / (np.linalg.norm(ans_emb) * np.linalg.norm(ref_emb)) for ref_emb in ref_embs]
-        return round(float(max(similarities)) * 100, 2)
+
+        similarities = [
+            np.dot(ans_emb, ref_emb) / 
+            (np.linalg.norm(ans_emb) * np.linalg.norm(ref_emb))
+            for ref_emb in ref_embs
+        ]
+
+        # Take the average of top 3 similarities for more stable scoring
+        top_similarities = sorted(similarities, reverse=True)[:3]
+        return round(float(np.mean(top_similarities)) * 100, 2)
     except Exception as e:
         print("Semantic scoring failed:", e)
         return 0.0
+
 
 # ---------- STREAMLIT UI ----------
 st.set_page_config("📄 RAG Chatbot", layout="wide")
@@ -155,5 +169,6 @@ if query:
         "content": answer,
         "accuracy": accuracy
     })
+
 
 
