@@ -62,7 +62,7 @@ def semantic_score_google_embeddings(answer, references):
 
 # ---------- STREAMLIT UI ----------
 st.set_page_config("📄 RAG Chatbot", layout="wide")
-st.title("🧠 RAG Chatbot PDF)")
+st.title("🧠 RAG Chatbot PDF")
 st.caption("Upload any PDF to ask questions based on its content.")
 st.markdown("---")
 
@@ -155,4 +155,5 @@ if query:
         "content": answer,
         "accuracy": accuracy
     })
+
 
