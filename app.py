@@ -38,18 +38,29 @@ def get_answer(query, vectorstore, chunks, top_k=8):
     references = [doc.page_content for doc in docs]
     context = "\n\n".join(references)
 
+    # Include chat memory (last 5 interactions)
+    chat_history = ""
+    for msg in st.session_state.messages[-10:]:  # adjust as needed
+        if msg["role"] == "user":
+            chat_history += f"User: {msg['content']}\n"
+        elif msg["role"] == "assistant":
+            chat_history += f"Assistant: {msg['content']}\n"
+
     prompt = f"""
-    Use the following document context to answer the question as accurately as possible.
+Use the following document context and conversation history to answer the question as accurately as possible.
 
-    If the answer is not mentioned in the context, respond with:
-    "Not mentioned in the document. However, based on my knowledge: ..."
+If the answer is not mentioned in the context, respond with:
+"Not mentioned in the document. However, based on my knowledge: ..."
 
-    --- Context ---
-    {context}
+--- Conversation History ---
+{chat_history}
 
-    --- Question ---
-    {query}
-    """
+--- Document Context ---
+{context}
+
+--- Question ---
+{query}
+"""
 
     answer = llm.invoke(prompt).content
     score = semantic_score_google_embeddings(answer, references)
@@ -166,6 +177,7 @@ if query:
         "content": answer,
         "accuracy": accuracy
     })
+
 
 
 
