@@ -89,6 +89,7 @@ def semantic_score_google_embeddings(answer, references):
 st.set_page_config("📄 RAG Chatbot", layout="wide")
 st.title("🧠 RAG Chatbot PDF")
 st.caption("Upload any PDF to ask questions based on its content.")
+st.caption("The accuracy is depending on the relation between context of document and the question")
 st.markdown("---")
 
 uploaded_file = st.file_uploader("📄 Upload a PDF", type=["pdf"])
@@ -114,7 +115,6 @@ if "vectorstore" not in st.session_state or "chunks" not in st.session_state:
 for entry in st.session_state.messages:
     with st.chat_message(entry["role"]):
         st.markdown(entry["content"])
-        st.caption("The accuracy is depending on the relation between context of document and the question")
         if "accuracy" in entry:
             acc = entry["accuracy"]
             if acc > 80:
@@ -123,6 +123,7 @@ for entry in st.session_state.messages:
                 color = "🟡 Medium"
             else:
                 color = "🔴 Low"
+            st.caption("The accuracy is depending on the relation between context of document and the question")
             st.markdown(f"📊 **Answer Accuracy: {acc}%** ({color})")
 
 if st.button("🧹 Clear Chat"):
@@ -177,6 +178,7 @@ if query:
         "content": answer,
         "accuracy": accuracy
     })
+
 
 
 
