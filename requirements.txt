@@ -5,8 +5,10 @@ langchain-google-genai>=0.0.9
 google-generativeai
 faiss-cpu
 gtts
+fitz
 speechrecognition
 PyMuPDF
 python-dotenv
 pydub
 numpy
+
