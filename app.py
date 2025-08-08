@@ -8,11 +8,17 @@ from langchain_google_genai import (
     GoogleGenerativeAIEmbeddings,
     ChatGoogleGenerativeAI
 )
-import numpy as np
 from gtts import gTTS
 import tempfile
+import numpy as np
+import fitz
 
 load_dotenv()
+
+# ---------- PAGE COUNT ----------
+def get_pdf_page_count(path):
+    pdf = fitz.open(path)
+    return pdf.page_count
 
 # ---------- SETUP GEMINI ----------
 google_api_key = os.getenv("GOOGLE_API_KEY")
@@ -23,24 +29,39 @@ os.environ["GOOGLE_API_KEY"] = google_api_key
 llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.3)
 embedder = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 
+# ---------- AUTO PARAMS ----------
+def get_dynamic_params(page_count: int):
+    if page_count <= 50:
+        return 600, 100, 4
+    elif page_count <= 200:
+        return 800, 150, 6
+    elif page_count <= 500:
+        return 1000, 150, 8
+    else:
+        return 1000, 200, 8
+
 # ---------- LOADER, SPLITTER, EMBEDDER ----------
 def build_vectorstore_from_path(path):
+    page_count = get_pdf_page_count(path)
+    chunk_size, chunk_overlap, _ = get_dynamic_params(page_count)  # ignore top_k here
+
     loader = PyMuPDFLoader(path)
     docs = loader.load()
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
     chunks = splitter.split_documents(docs)
     vectorstore = FAISS.from_documents(chunks, embedding=embedder)
-    return vectorstore, [doc.page_content for doc in chunks]
+    return vectorstore, [doc.page_content for doc in chunks], page_count
 
 # ---------- RAG + Scoring ----------
-def get_answer(query, vectorstore, chunks, top_k=8):
+def get_answer(query, vectorstore, chunks, page_count):
+    _, _, top_k = get_dynamic_params(page_count)
     docs = vectorstore.similarity_search(query, k=top_k)
     references = [doc.page_content for doc in docs]
     context = "\n\n".join(references)
 
-    # Include chat memory (last 5 interactions)
+    # Include chat memory (last 10 interactions)
     chat_history = ""
-    for msg in st.session_state.messages[-10:]:  # adjust as needed
+    for msg in st.session_state.messages[-10:]:
         if msg["role"] == "user":
             chat_history += f"User: {msg['content']}\n"
         elif msg["role"] == "assistant":
@@ -64,7 +85,7 @@ If the answer is not mentioned in the context, respond with:
 
     answer = llm.invoke(prompt).content
     score = semantic_score_google_embeddings(answer, references)
-    return answer.strip(), references, score
+    return answer.strip(), references, score#type: ignore
 
 def semantic_score_google_embeddings(answer, references):
     try:
@@ -72,12 +93,11 @@ def semantic_score_google_embeddings(answer, references):
         ref_embs = [embedder.embed_query(ref) for ref in references]
 
         similarities = [
-            np.dot(ans_emb, ref_emb) / 
-            (np.linalg.norm(ans_emb) * np.linalg.norm(ref_emb))
+            np.dot(ans_emb, ref_emb) / (np.linalg.norm(ans_emb) * np.linalg.norm(ref_emb))
             for ref_emb in ref_embs
         ]
 
-        # Take the average of top 3 similarities for more stable scoring
+        # Take the average of top 3 similarities for stable scoring
         top_similarities = sorted(similarities, reverse=True)[:3]
         return round(float(np.mean(top_similarities)) * 100, 2)
     except Exception as e:
@@ -88,12 +108,13 @@ def semantic_score_google_embeddings(answer, references):
 # ---------- STREAMLIT UI ----------
 st.set_page_config("📄 RAG Chatbot", layout="wide")
 st.title("🧠 RAG Chatbot PDF")
-st.caption("Upload any PDF to ask questions based on its content.")
-st.caption("The accuracy is depending on the relation between context of document and the question")
+with st.expander("How to use..."):
+    st.markdown("Upload any PDF to ask questions based on its content.")
+    st.markdown("The accuracy depends on the relation between context of document and the question.")
+    st.markdown("Snippets has some context of document.")
 st.markdown("---")
 
 uploaded_file = st.file_uploader("📄 Upload a PDF", type=["pdf"])
-use_custom_pdf = uploaded_file is not None
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -102,12 +123,21 @@ if uploaded_file:
     with st.spinner("Processing uploaded PDF..."):
         with open("uploaded.pdf", "wb") as f:
             f.write(uploaded_file.read())
-        vectorstore, chunks = build_vectorstore_from_path("uploaded.pdf")
+
+        vectorstore, chunks, page_count = build_vectorstore_from_path("uploaded.pdf")
+
+        chunk_size, chunk_overlap, top_k = get_dynamic_params(page_count)
+
         st.session_state.vectorstore = vectorstore
         st.session_state.chunks = chunks
-        st.success("✅ PDF processed! You can now ask questions.")
+        st.session_state.page_count = page_count
+        st.session_state.chunk_size = chunk_size
+        st.session_state.chunk_overlap = chunk_overlap
+        st.session_state.top_k = top_k
 
-if "vectorstore" not in st.session_state or "chunks" not in st.session_state:
+        st.success(f"✅ PDF processed! Page count: {page_count}. You can now ask questions.")
+        
+if "vectorstore" not in st.session_state or "chunks" not in st.session_state or "page_count" not in st.session_state:
     st.warning("📄 Please upload a PDF first to enable the chatbot.")
     st.stop()
 
@@ -123,13 +153,24 @@ for entry in st.session_state.messages:
                 color = "🟡 Medium"
             else:
                 color = "🔴 Low"
-            st.caption("The accuracy is depending on the relation between context of document and the question")
+            st.caption("The accuracy depends on the relation between context of document and the question")
             st.markdown(f"📊 **Answer Accuracy: {acc}%** ({color})")
+            
 
-if st.button("🧹 Clear Chat"):
+if st.sidebar.button("🧹 Clear Chat"):
     st.session_state.messages = []
     st.rerun()
-
+with st.sidebar.expander("More Info..."):
+    st.markdown("models: Gimini-2.0-flash")
+    st.markdown("embeder: GoogleGenerativeAIEmbeddings(model=embedding-001)")
+    st.markdown("token usage: 80.78k")
+    if "page_count" in st.session_state:
+        st.caption(
+            f"📄 Pages: {st.session_state.page_count} | "
+            f"🔹 Chunk Size: {st.session_state.chunk_size} | "
+            f"🔹 Overlap: {st.session_state.chunk_overlap} | "
+            f"🔹 top_k: {st.session_state.top_k}"
+    )
 query = st.chat_input("Ask a question...")
 if query:
     with st.chat_message("user"):
@@ -141,48 +182,33 @@ if query:
             answer, sources, accuracy = get_answer(
                 query,
                 st.session_state.vectorstore,
-                st.session_state.chunks
+                st.session_state.chunks,
+                st.session_state.page_count
             )
             st.markdown(answer)
 
-            # Show accuracy score with color label
             if accuracy > 80:
                 label = "🟢 High"
             elif accuracy > 50:
                 label = "🟡 Medium"
             else:
                 label = "🔴 Low"
-
             st.markdown(f"📊 **Answer Accuracy: {accuracy}%** ({label})")
+            tts = gTTS(answer)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
+                tmp_path = tmpfile.name
+            tts.save(tmp_path)
 
+            with open(tmp_path, 'rb') as audio_file:
+                audio_bytes = audio_file.read()
+                st.audio(audio_bytes, format='audio/mp3')
+            os.remove(tmp_path)
+            with st.expander("📚 Source Snippets"):
+                for i, snippet in enumerate(sources):
+                    st.markdown(f"**Snippet {i+1}:**\n> {snippet[:300]}...")
 
-            # ✅ TEXT TO SPEECH SECTION
-            try:
-                tts = gTTS(answer)
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
-                    tts.save(tmpfile.name)
-                    audio_bytes = open(tmpfile.name, 'rb').read()
-                    st.audio(audio_bytes, format="audio/mp3")
-            except Exception as e:
-                st.warning(f"TTS failed: {e}")
-
-    
-    if st.download_button("💾 Download Chat History", 
-        data="\n\n".join([f"{m['role'].capitalize()}: {m['content']}" for m in st.session_state.messages]),
-        file_name="chat_history.txt",
-        use_container_width=True):
-        st.success("✅ Chat downloaded!")
-        
     st.session_state.messages.append({
         "role": "assistant",
         "content": answer,
         "accuracy": accuracy
     })
-
-
-
-
-
-
-
-
