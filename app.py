@@ -71,7 +71,7 @@ def get_answer(query, vectorstore, chunks, page_count):
 Use the following document context and conversation history to answer the question as accurately as possible.
 
 If the answer is not mentioned in the context, respond with:
-"Not mentioned in the document. However, based on my knowledge: ..."
+"Not mentioned in the document."
 
 --- Conversation History ---
 {chat_history}
@@ -212,3 +212,4 @@ if query:
         "content": answer,
         "accuracy": accuracy
     })
+
