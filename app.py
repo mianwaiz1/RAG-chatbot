@@ -54,12 +54,12 @@ def build_vectorstore_from_path(path):
 
 # ---------- RAG + Scoring ----------
 def get_answer(query, vectorstore, chunks, page_count):
-    _, _, top_k = get_dynamic_params(page_count)
-    docs = vectorstore.similarity_search(query, k=top_k)
+    # Search PDF
+    docs = vectorstore.similarity_search(query, k=st.session_state.top_k)
     references = [doc.page_content for doc in docs]
     context = "\n\n".join(references)
 
-    # Include chat memory (last 10 interactions)
+    # Conversation history
     chat_history = ""
     for msg in st.session_state.messages[-10:]:
         if msg["role"] == "user":
@@ -67,14 +67,11 @@ def get_answer(query, vectorstore, chunks, page_count):
         elif msg["role"] == "assistant":
             chat_history += f"Assistant: {msg['content']}\n"
 
-    prompt = f"""
-Use the following document context and conversation history to answer the question as accurately as possible.
+    # First try to answer using PDF
+    pdf_prompt = f"""
+Use ONLY the following document context to answer the question.
 
-If the answer is not mentioned in the context, respond with:
-"Not mentioned in the document."
-
---- Conversation History ---
-{chat_history}
+If the answer is not in the document, just say: "Not mentioned in the document."
 
 --- Document Context ---
 {context}
@@ -82,10 +79,23 @@ If the answer is not mentioned in the context, respond with:
 --- Question ---
 {query}
 """
+    pdf_answer = llm.invoke(pdf_prompt).content.strip()
 
-    answer = llm.invoke(prompt).content
-    score = semantic_score_google_embeddings(answer, references)
-    return answer.strip(), references, score#type: ignore
+    # Calculate how relevant this answer is to the PDF
+    score = semantic_score_google_embeddings(pdf_answer, references)
+
+    # If score is too low, fall back to general knowledge
+    if score < 52:
+        general_prompt = f"""
+Answer the following question using your general knowledge:
+{query}
+"""
+        general_answer = llm.invoke(general_prompt).content.strip()
+        final_answer = f"Not mentioned in the document. However, based on my knowledge: {general_answer}"
+        return final_answer, references, score
+    else:
+        return pdf_answer, references, score
+
 
 def semantic_score_google_embeddings(answer, references):
     try:
@@ -212,4 +222,5 @@ if query:
         "content": answer,
         "accuracy": accuracy
     })
+
 
