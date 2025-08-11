@@ -223,4 +223,3 @@ if query:
         "accuracy": accuracy
     })
 
-
