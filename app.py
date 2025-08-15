@@ -85,7 +85,7 @@ If the answer is not in the document, just say: "Not mentioned in the document."
     score = semantic_score_google_embeddings(pdf_answer, references)
 
     # If score is too low, fall back to general knowledge
-    if score < 52:
+    if score < 56:
         general_prompt = f"""
 Answer the following question using your general knowledge:
 {query}
@@ -221,6 +221,7 @@ if query:
         "content": answer,
         "accuracy": accuracy
     })
+
 
 
 
