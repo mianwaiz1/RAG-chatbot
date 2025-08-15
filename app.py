@@ -136,14 +136,13 @@ if uploaded_file:
 
         vectorstore, chunks, page_count = build_vectorstore_from_path("uploaded.pdf")
 
-        chunk_size, chunk_overlap, top_k = get_dynamic_params(page_count)
+        chunk_size, chunk_overlap = get_dynamic_params(page_count)
 
         st.session_state.vectorstore = vectorstore
         st.session_state.chunks = chunks
         st.session_state.page_count = page_count
         st.session_state.chunk_size = chunk_size
         st.session_state.chunk_overlap = chunk_overlap
-        st.session_state.top_k = top_k
 
         st.success(f"✅ PDF processed! Page count: {page_count}. You can now ask questions.")
         
@@ -179,7 +178,7 @@ with st.sidebar.expander("More Info..."):
             f"📄 Pages: {st.session_state.page_count} | "
             f"🔹 Chunk Size: {st.session_state.chunk_size} | "
             f"🔹 Overlap: {st.session_state.chunk_overlap} | "
-            f"🔹 top_k: {st.session_state.top_k}"
+            f"🔹 top_k: {10}"
     )
 query = st.chat_input("Ask a question...")
 if query:
@@ -222,5 +221,6 @@ if query:
         "content": answer,
         "accuracy": accuracy
     })
+
 
 
