@@ -32,18 +32,18 @@ embedder = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 # ---------- AUTO PARAMS ----------
 def get_dynamic_params(page_count: int):
     if page_count <= 50:
-        return 600, 100, 4
+        return 600, 100
     elif page_count <= 200:
-        return 800, 150, 6
+        return 800, 150
     elif page_count <= 500:
-        return 1000, 150, 8
+        return 1000, 150
     else:
-        return 1000, 200, 8
+        return 1000, 200
 
 # ---------- LOADER, SPLITTER, EMBEDDER ----------
 def build_vectorstore_from_path(path):
     page_count = get_pdf_page_count(path)
-    chunk_size, chunk_overlap, _ = get_dynamic_params(page_count)  # ignore top_k here
+    chunk_size, chunk_overlap= get_dynamic_params(page_count)  # ignore top_k here
 
     loader = PyMuPDFLoader(path)
     docs = loader.load()
@@ -55,7 +55,7 @@ def build_vectorstore_from_path(path):
 # ---------- RAG + Scoring ----------
 def get_answer(query, vectorstore, chunks, page_count):
     # Search PDF
-    docs = vectorstore.similarity_search(query, k=st.session_state.top_k)
+    docs = vectorstore.similarity_search(query, k=10)
     references = [doc.page_content for doc in docs]
     context = "\n\n".join(references)
 
@@ -222,4 +222,5 @@ if query:
         "content": answer,
         "accuracy": accuracy
     })
+
 
