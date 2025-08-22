@@ -10,3 +10,5 @@ pymupdf==1.24.10
 python-dotenv
 pydub
 numpy
+fitz
+
