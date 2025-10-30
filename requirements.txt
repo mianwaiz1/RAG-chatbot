@@ -11,4 +11,5 @@ python-dotenv
 pydub
 numpy
 fitz
+sentence-transformers
 
