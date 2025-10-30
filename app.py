@@ -4,10 +4,9 @@ from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_google_genai import (
-    GoogleGenerativeAIEmbeddings,
-    ChatGoogleGenerativeAI
-)
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.embeddings import HuggingFaceEmbeddings
+
 from gtts import gTTS
 import tempfile
 import numpy as np
@@ -27,7 +26,7 @@ if not google_api_key:
 os.environ["GOOGLE_API_KEY"] = google_api_key
 
 llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.3)
-embedder = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+embedder = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
 # ---------- AUTO PARAMS ----------
 def get_dynamic_params(page_count: int):
@@ -221,6 +220,7 @@ if query:
         "content": answer,
         "accuracy": accuracy
     })
+
 
 
 
